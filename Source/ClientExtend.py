@@ -1,7 +1,7 @@
 from tkinter import *
 import tkinter.messagebox
 from PIL import Image, ImageTk
-import socket, threading, sys, traceback, os
+import socket, threading, sys, traceback, os, time
 
 from RtpPacket import RtpPacket
 
@@ -19,6 +19,10 @@ class Client:
 	PAUSE = 2
 	TEARDOWN = 3
 	
+	begin = 0
+	sumOfTime = 0
+	sumData = 0
+	counter = 0
 	# Initiation..
 	def __init__(self, master, serveraddr, serverport, rtpport, filename):
 		self.master = master
@@ -39,11 +43,6 @@ class Client:
 	# THIS GUI IS JUST FOR REFERENCE ONLY, STUDENTS HAVE TO CREATE THEIR OWN GUI 	
 	def createWidgets(self):
 		"""Build GUI."""
-		# Create Setup button
-		self.setup = Button(self.master, width=20, padx=3, pady=3)
-		self.setup["text"] = "Setup"
-		self.setup["command"] = self.setupMovie
-		self.setup.grid(row=1, column=0, padx=2, pady=2)
 		
 		# Create Play button		
 		self.start = Button(self.master, width=20, padx=3, pady=3)
@@ -67,10 +66,6 @@ class Client:
 		self.label = Label(self.master, height=19)
 		self.label.grid(row=0, column=0, columnspan=4, sticky=W+E+N+S, padx=5, pady=5) 
 	
-	def setupMovie(self):
-		"""Setup button handler."""
-		if self.state == self.INIT:
-			self.sendRtspRequest(self.SETUP)
 	
 	def exitClient(self):
 		"""Teardown button handler."""
@@ -80,12 +75,25 @@ class Client:
 		self.master.destroy() 
 		os.remove(CACHE_FILE_NAME + str(self.sessionId) + CACHE_FILE_EXT)
 
+		if  self.begin != 0:
+			self.sumOfTime += time.time() - self.begin
+		if  self.sumOfTime>0:
+			rateData = float(int(self.sumData)/int(self.sumOfTime))
+			print('-'*40 + "\nVideo Data Rate: " + str(rateData) +"\n" + '-'*40)
+			rateLoss = float(self.counter/self.frameNbr)
+			print('-'*40 + "\nRTP Packet Loss Rate: " + str(rateLoss) +"\n" + '-'*40)
+
 	def pauseMovie(self):
 		"""Pause button handler."""
 		if self.state == self.PLAYING:
 			self.sendRtspRequest(self.PAUSE)
+			self.sumOfTime += time.time() - self.begin
 	
 	def playMovie(self):
+		#Bonus 2
+		if self.state == self.INIT:
+			self.sendRtspRequest(self.SETUP)
+			return
 		"""Play button handler."""
 		if self.state == self.READY:
 			threading.Thread(target=self.listenRtp).start()
@@ -101,6 +109,7 @@ class Client:
 				if data:
 					rtpPacket = RtpPacket()
 					rtpPacket.decode(data)
+					self.sumData += len(data)
 					
 					currFrameNbr = rtpPacket.seqNum()
 					#print("Current Seq Num: " + str(currFrameNbr))
